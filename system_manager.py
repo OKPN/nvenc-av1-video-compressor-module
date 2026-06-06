@@ -1,6 +1,7 @@
 import socket
 import subprocess
 import os
+import sys
 
 def check_comfy_status(host="127.0.0.1", port=8188):
     """ComfyUIのポートが開放されているか確認"""
@@ -15,3 +16,8 @@ def launch_comfy(bat_path):
         subprocess.Popen(["cmd", "/c", bat_path], creationflags=subprocess.CREATE_NEW_CONSOLE)
         return "🚀 起動コマンドを送信しました。立ち上がるまで数十秒お待ちください。"
     return f"❌ エラー: バッチファイルが見つかりません\nパス: {bat_path}"
+
+def restart_gradio():
+    """Gradioアプリ自体を再起動する"""
+    # 現在の実行コマンドを引き継いでプロセスを置換
+    os.execv(sys.executable, ['python'] + sys.argv)

@@ -49,6 +49,7 @@ def create_ui(config, save_func, load_func):
                         with gr.Group():
                             quality_sl = gr.Slider(1, 100, value=85, step=1, label="品質 (JPEG)")
                             convert_chk = gr.Checkbox(label="PNGをJPEGに変換する (推奨)", value=True)
+                            strip_meta_check = gr.Checkbox(label="メタデータを削除する (プライバシー保護)", value=False) # 初期値は削除しない(保持する))
                             dist_sl_single = gr.Slider(0.0, 4.0, value=1.0, step=0.1, label="Distance (0=無劣化)", visible=False)
                             effort_sl_single = gr.Slider(1, 9, value=7, step=1, label="Effort (速度優先=1, 圧縮優先=9)", visible=False)
 
@@ -67,17 +68,23 @@ def create_ui(config, save_func, load_func):
 
                 mode_choice.change(update_mode_ui, inputs=[mode_choice], outputs=[quality_sl, convert_chk, dist_sl_single, effort_sl_single])
                 
-                def process_img(path, mode, q, convert, dist, effort):
+                def process_img(path, mode, q, convert, strip_meta, dist, effort): # ★引数を追加
                     if not path: return None, "画像を選択してください"
                     if mode == "JXL変換":
-                        res, in_s, out_s, log = encode_utils.encode_image_jxl(path, distance=dist, effort=effort)
+                         # encode_utils 側の引数名に合わせて渡す
+                         res, in_s, out_s, log = encode_utils.encode_image_jxl(path, distance=dist, effort=effort, strip_metadata=strip_meta) # ★引数追加
                     else:
-                        res, in_s, out_s, log = encode_utils.optimize_image_standard(path, q, convert)
+                         # 標準最適化側にも渡す
+                         res, in_s, out_s, log = encode_utils.optimize_image_standard(path, q, convert, strip_metadata=strip_meta) # ★引数追加
                     return res, f"**{log}**\nサイズ: {in_s} → {out_s}"
 
-                img_btn.click(process_img, [img_in, mode_choice, quality_sl, convert_chk, dist_sl_single, effort_sl_single], [img_out, img_info])
+                # 3. クリックイベントの inputs に strip_meta_check を追加
+                img_btn.click(
+                    process_img, 
+                    [img_in, mode_choice, quality_sl, convert_chk, strip_meta_check, dist_sl_single, effort_sl_single], # ★ここに追加
+                    [img_out, img_info]
+                )
                 
-                # 【追加】動的に書き換わるリンク表示エリア1
                 links_display1 = gr.Markdown(render_links(config.get("uploader_links", [])))
 
             # --- 2. 動画変換 (AV1) ---
@@ -162,6 +169,10 @@ def create_ui(config, save_func, load_func):
                         refresh_btn = gr.Button("🔄 状態更新")
                         launch_btn = gr.Button("🚀 ComfyUI 起動", variant="primary")
 
+                        gr.Markdown("---") # 区切り線
+                        restart_btn = gr.Button("⚠️ アプリを再起動", variant="stop")
+                        gr.Markdown("<small>ポート変更後や動作が不安定な場合に押してください</small>")
+
                 # 保存ボタンのクリックイベント (引数と出力を拡張)
                 save_btn.click(
                     on_save, 
@@ -170,5 +181,5 @@ def create_ui(config, save_func, load_func):
                 )
                 refresh_btn.click(lambda: "🟢 稼働中" if system_manager.check_comfy_status() else "🔴 停止中", outputs=status_text)
                 launch_btn.click(lambda: system_manager.launch_comfy(load_func()["launch_bat"]), outputs=status_text)
-
+                restart_btn.click(fn=system_manager.restart_gradio,inputs=None,outputs=None)
     return demo

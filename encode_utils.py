@@ -5,10 +5,8 @@ from pathlib import Path
 from PIL import Image
 import concurrent.futures
 import gradio as gr
-# 新しい format_size_extended をインポート
 from file_utils import get_file_size_str, format_size_extended
 
-# --- (既存の関数: encode_video, encode_image_jxl, optimize_image_standard はそのまま維持) ---
 # --- 動画エンコード ---
 def encode_video(input_file_path):
     if input_file_path is None: return None
@@ -29,10 +27,9 @@ def encode_video(input_file_path):
         return None
 
 # --- 画像エンコード (JPEG XL - 単発/ffmpeg経由) ---
-def encode_image_jxl(input_image_path, distance=1.0, effort=7):
+def encode_image_jxl(input_image_path, distance=1.0, effort=7, strip_metadata=False):
     """
-    distance: 0.0=無劣化, 1.0=標準, 2.0-4.0=高圧縮
-    effort: 1-9 (圧縮にかける手間)
+    引数に strip_metadata を追加
     """
     if input_image_path is None: return None, "", "", ""
     input_size = get_file_size_str(input_image_path)
@@ -41,14 +38,20 @@ def encode_image_jxl(input_image_path, distance=1.0, effort=7):
     stem_name = Path(input_image_path).stem
     output_path = os.path.join(temp_dir, f"{stem_name}.jxl")
 
-    # ffmpegコマンドに effort を追加
+    # ffmpegコマンドの構築
     command = [
         "ffmpeg", "-y", "-i", input_image_path,
         "-c:v", "libjxl", 
         "-distance", str(distance),
         "-effort", str(effort),
-        output_path
     ]
+
+    # メタデータ削除設定 (-map_metadata -1 で全削除)
+    if strip_metadata:
+        command.extend(["-map_metadata", "-1"])
+    
+    command.append(output_path)
+
     try:
         subprocess.run(command, check=True)
         output_size = get_file_size_str(output_path)
@@ -62,7 +65,10 @@ def encode_image_jxl(input_image_path, distance=1.0, effort=7):
         return None, "エラー", "エラー", f"失敗: {e}"
 
 # --- 画像最適化 (互換モード) ---
-def optimize_image_standard(input_image_path, quality, convert_to_jpeg):
+def optimize_image_standard(input_image_path, quality, convert_to_jpeg, strip_metadata=False):
+    """
+    引数に strip_metadata を追加し、ロジックを整理
+    """
     if input_image_path is None: return None, "", "", ""
     
     input_size = get_file_size_str(input_image_path)
@@ -70,41 +76,49 @@ def optimize_image_standard(input_image_path, quality, convert_to_jpeg):
     original_path = Path(input_image_path)
     
     try:
-        img = Image.open(input_image_path)
+        with Image.open(input_image_path) as img:
+            # JPEG変換設定の判定
+            is_jpeg_target = convert_to_jpeg or original_path.suffix.lower() in ['.jpg', '.jpeg']
+            
+            if is_jpeg_target:
+                output_filename = f"{original_path.stem}_opt.jpg"
+                output_path = os.path.join(temp_dir, output_filename)
+                # RGBAやPモード（透過あり）をRGBに変換しないとJPEGで保存できない
+                if img.mode in ("RGBA", "P", "LA"):
+                    img = img.convert("RGB")
+                
+                save_args = {"quality": int(quality), "optimize": True, "progressive": True}
+            else:
+                output_filename = f"{original_path.stem}_opt.png"
+                output_path = os.path.join(temp_dir, output_filename)
+                save_args = {"optimize": True}
+
+            # メタデータを保持する場合のみ EXIF を渡す
+            if not strip_metadata:
+                if "exif" in img.info:
+                    save_args["exif"] = img.info["exif"]
+
+            img.save(output_path, **save_args)
+
+            # 統計計算
+            output_size = get_file_size_str(output_path)
+            in_bytes = os.path.getsize(input_image_path)
+            out_bytes = os.path.getsize(output_path)
+            reduction = (1 - (out_bytes / in_bytes)) * 100 if in_bytes > 0 else 0
+            
+            return output_path, input_size, output_size, f"最適化完了 ({reduction:.1f}% 削減)"
+
     except Exception as e:
-        return None, "エラー", "エラー", f"画像が開けませんでした: {e}"
+        print(f"Optimization error: {e}")
+        return None, "エラー", "エラー", f"失敗: {str(e)}"
 
-    is_jpeg_target = convert_to_jpeg or original_path.suffix.lower() in ['.jpg', '.jpeg']
-    
-    if is_jpeg_target:
-        output_filename = f"{original_path.stem}_opt.jpg"
-        output_path = os.path.join(temp_dir, output_filename)
-        if img.mode in ("RGBA", "P"):
-            img = img.convert("RGB")
-        img.save(output_path, "JPEG", quality=int(quality), optimize=True, progressive=True)
-    else:
-        output_filename = f"{original_path.stem}_opt.png"
-        output_path = os.path.join(temp_dir, output_filename)
-        img.save(output_path, "PNG", optimize=True)
-
-    output_size = get_file_size_str(output_path)
-    in_bytes = os.path.getsize(input_image_path)
-    out_bytes = os.path.getsize(output_path)
-    reduction = (1 - (out_bytes / in_bytes)) * 100 if in_bytes > 0 else 0
-    
-    return output_path, input_size, output_size, f"最適化完了 ({reduction:.1f}% 削減)"
-
-# ==========================================
-# --- 以下、新規追加: JXL一括変換ロジック ---
-# ==========================================
-
+# --- JXL一括変換ロジック ---
 def _convert_single_file_jxl_batch(input_path, output_path, distance, effort, strip_metadata, cjxl_path):
-    """一括変換用の内部関数: 個別のファイルを変換"""
+    """一括変換用の内部関数"""
     try:
         input_size = input_path.stat().st_size
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # コマンドの構築
         cmd = [
             cjxl_path, str(input_path), str(output_path),
             "-d", str(distance),
@@ -112,15 +126,12 @@ def _convert_single_file_jxl_batch(input_path, output_path, distance, effort, st
             "--quiet"
         ]
 
-        # Distanceが指定されている場合、JPEGの自動ロスレス再構築をオフにする
         if distance > 0:
             cmd.append("--lossless_jpeg=0")
             
-        # メタデータ削除フラグ
         if strip_metadata:
             cmd.append("--strip")
         
-        # 実行
         result = subprocess.run(cmd, capture_output=True, text=True)
         
         if result.returncode == 0:
@@ -141,19 +152,15 @@ def batch_encode_jxl_recursive(input_root_str, output_root_str, distance, effort
     if not output_root_str:
          return "エラー: 出力フォルダーを指定してください。", ""
 
-    # cjxl.exe のパス解決 (このスクリプトと同じディレクトリを探す)
     cjxl_exe = Path(__file__).parent / "cjxl.exe"
     cjxl_path = str(cjxl_exe) if cjxl_exe.exists() else "cjxl"
 
-    # 変換対象の拡張子
     extensions = {".png", ".jpg", ".jpeg"}
     files_to_process = []
 
-    # 再帰的にファイルを探索
     progress(0, desc="ファイル探索中...")
     for path in input_root.rglob("*"):
         if path.suffix.lower() in extensions:
-            # 入力ルートからの相対パスを維持して出力パスを作成
             relative_path = path.relative_to(input_root)
             output_path = output_root / relative_path.with_suffix(".jxl")
             files_to_process.append((path, output_path))
@@ -167,8 +174,6 @@ def batch_encode_jxl_recursive(input_root_str, output_root_str, distance, effort
     success_count = 0
     logs = []
     
-    # 並列処理の実行
-    # CPUコア数に応じて自動でワーカー数が調整される
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = {
             executor.submit(_convert_single_file_jxl_batch, inp, outp, distance, effort, strip_metadata, cjxl_path): inp 
@@ -182,10 +187,8 @@ def batch_encode_jxl_recursive(input_root_str, output_root_str, distance, effort
                 total_input_size += in_size
                 total_output_size += out_size
                 success_count += 1
-            # 進捗バーの更新
             progress((i + 1) / total_files, desc=f"変換中: {i+1}/{total_files}")
 
-    # 統計レポートの作成
     reduction = total_input_size - total_output_size
     reduction_percent = (reduction / total_input_size * 100) if total_input_size > 0 else 0
     
@@ -201,6 +204,4 @@ def batch_encode_jxl_recursive(input_root_str, output_root_str, distance, effort
     """
     
     final_log = "\n".join(logs)
-    if not final_log: final_log = "処理完了。ログはありません。"
-
     return final_log, summary_md
