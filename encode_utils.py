@@ -5,37 +5,71 @@ from pathlib import Path
 from PIL import Image
 import concurrent.futures
 import gradio as gr
-from file_utils import get_file_size_str, format_size_extended
+from file_utils import get_file_size_str, format_size_extended, safe_filename
 
-# --- 動画エンコード ---
+# --- 動画エンコード (video_compressor パッケージに処理を委譲) ---
 def encode_video(input_file_path):
-    if input_file_path is None: return None
-    temp_dir = tempfile.gettempdir()
-    stem_name = Path(input_file_path).stem
-    output_path = os.path.join(temp_dir, f"{stem_name}_output.mp4")
+    import video_compressor
+    out_path, _ = video_compressor.compress_video(input_file_path)
+    return out_path
+
+# --- 画像エンコード (WebP) ---
+def encode_image_webp(input_image_path, quality=85, lossless=False, strip_metadata=False, custom_filename=None):
+    if input_image_path is None: return None, "", "", ""
     
-    command = [
-        "ffmpeg", "-y", "-i", input_file_path,
-        "-c:v", "av1_nvenc", "-rc:v", "vbr", "-cq:v", "40", "-preset", "p4",
-        "-c:a", "copy", output_path
-    ]
+    input_size = get_file_size_str(input_image_path)
+    temp_dir = tempfile.gettempdir()
+    original_path = Path(input_image_path)
+    
+    stem_name = safe_filename(custom_filename) if custom_filename and custom_filename.strip() else original_path.stem
+    output_filename = f"{stem_name}.webp"
+    output_path = os.path.join(temp_dir, output_filename)
+    
     try:
-        subprocess.run(command, check=True)
-        return output_path
-    except subprocess.CalledProcessError as e:
-        print(f"動画エラー: {e}")
-        return None
+        with Image.open(input_image_path) as img:
+            # 透過 (Alpha) を保持するために必要に応じて RGBA に変換
+            if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+                img = img.convert("RGBA")
+            elif img.mode != "RGB":
+                img = img.convert("RGB")
+            
+            save_args = {
+                "format": "webp",
+                "quality": int(quality),
+                "lossless": lossless,
+                "method": 6  # 最高圧縮効率 (処理時間は少しかかりますがファイルサイズを最小化)
+            }
+
+            # メタデータを残す場合
+            if not strip_metadata and "exif" in img.info:
+                save_args["exif"] = img.info["exif"]
+
+            img.save(output_path, **save_args)
+
+            # 統計計算
+            output_size = get_file_size_str(output_path)
+            in_bytes = os.path.getsize(input_image_path)
+            out_bytes = os.path.getsize(output_path)
+            reduction = (1 - (out_bytes / in_bytes)) * 100 if in_bytes > 0 else 0
+            
+            return output_path, input_size, output_size, f"WebP変換成功 ({reduction:.1f}% 削減)"
+
+    except Exception as e:
+        print(f"WebP encode error: {e}")
+        return None, "エラー", "エラー", f"失敗: {str(e)}"
 
 # --- 画像エンコード (JPEG XL - 単発/ffmpeg経由) ---
-def encode_image_jxl(input_image_path, distance=1.0, effort=7, strip_metadata=False):
+def encode_image_jxl(input_image_path, distance=1.0, effort=7, strip_metadata=False, custom_filename=None):
     """
-    引数に strip_metadata を追加
+    引数に strip_metadata と custom_filename を追加
     """
     if input_image_path is None: return None, "", "", ""
     input_size = get_file_size_str(input_image_path)
     
     temp_dir = tempfile.gettempdir()
-    stem_name = Path(input_image_path).stem
+    original_path = Path(input_image_path)
+    
+    stem_name = safe_filename(custom_filename) if custom_filename and custom_filename.strip() else original_path.stem
     output_path = os.path.join(temp_dir, f"{stem_name}.jxl")
 
     # ffmpegコマンドの構築
@@ -65,9 +99,9 @@ def encode_image_jxl(input_image_path, distance=1.0, effort=7, strip_metadata=Fa
         return None, "エラー", "エラー", f"失敗: {e}"
 
 # --- 画像最適化 (互換モード) ---
-def optimize_image_standard(input_image_path, quality, convert_to_jpeg, strip_metadata=False):
+def optimize_image_standard(input_image_path, quality, convert_to_jpeg, strip_metadata=False, custom_filename=None):
     """
-    引数に strip_metadata を追加し、ロジックを整理
+    引数に strip_metadata と custom_filename を追加し、ロジックを整理
     """
     if input_image_path is None: return None, "", "", ""
     
@@ -75,13 +109,15 @@ def optimize_image_standard(input_image_path, quality, convert_to_jpeg, strip_me
     temp_dir = tempfile.gettempdir()
     original_path = Path(input_image_path)
     
+    stem_name = safe_filename(custom_filename) if custom_filename and custom_filename.strip() else original_path.stem
+    
     try:
         with Image.open(input_image_path) as img:
             # JPEG変換設定の判定
             is_jpeg_target = convert_to_jpeg or original_path.suffix.lower() in ['.jpg', '.jpeg']
             
             if is_jpeg_target:
-                output_filename = f"{original_path.stem}_opt.jpg"
+                output_filename = f"{stem_name}_opt.jpg"
                 output_path = os.path.join(temp_dir, output_filename)
                 # RGBAやPモード（透過あり）をRGBに変換しないとJPEGで保存できない
                 if img.mode in ("RGBA", "P", "LA"):
@@ -89,7 +125,7 @@ def optimize_image_standard(input_image_path, quality, convert_to_jpeg, strip_me
                 
                 save_args = {"quality": int(quality), "optimize": True, "progressive": True}
             else:
-                output_filename = f"{original_path.stem}_opt.png"
+                output_filename = f"{stem_name}_opt.png"
                 output_path = os.path.join(temp_dir, output_filename)
                 save_args = {"optimize": True}
 

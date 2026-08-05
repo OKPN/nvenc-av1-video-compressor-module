@@ -5,6 +5,7 @@ import file_utils
 import system_manager
 import upscaler_utils
 import comfy_utils
+import video_compressor
 
 def create_ui(config, save_func, load_func):
     
@@ -44,58 +45,98 @@ def create_ui(config, save_func, load_func):
                 with gr.Row():
                     with gr.Column():
                         img_in = gr.Image(label="入力画像", type="filepath")
-                        mode_choice = gr.Radio(["標準最適化", "JXL変換"], value="標準最適化", label="モード")
+                        mode_choice = gr.Radio(["標準最適化", "WebP変換", "JXL変換"], value="標準最適化", label="モード")
                         
                         with gr.Group():
                             quality_sl = gr.Slider(1, 100, value=85, step=1, label="品質 (JPEG)")
                             convert_chk = gr.Checkbox(label="PNGをJPEGに変換する (推奨)", value=True)
                             strip_meta_check = gr.Checkbox(label="メタデータを削除する (プライバシー保護)", value=False) # 初期値は削除しない(保持する))
+                            
+                            webp_quality_sl = gr.Slider(1, 100, value=85, step=1, label="品質 (WebP)", visible=False)
+                            webp_lossless_chk = gr.Checkbox(label="ロスレス (可逆圧縮) ※容量は増えますが劣化しません", value=False, visible=False)
+                            
                             dist_sl_single = gr.Slider(0.0, 4.0, value=1.0, step=0.1, label="Distance (0=無劣化)", visible=False)
                             effort_sl_single = gr.Slider(1, 9, value=7, step=1, label="Effort (速度優先=1, 圧縮優先=9)", visible=False)
 
                         img_btn = gr.Button("変換実行", variant="primary")
                         
                     with gr.Column():
+                        with gr.Row():
+                            custom_filename = gr.Textbox(label="保存ファイル名 (拡張子不要)", placeholder="生成後に入力→Enterで反映可", scale=3)
+                            apply_name_btn = gr.Button("🔄 反映", scale=1)
                         img_out = gr.File(label="出力ファイル")
                         img_info = gr.Markdown("ステータス: 待機中")
+                        last_output_path = gr.State(None)
 
                 # 表示切替ロジック
                 def update_mode_ui(mode):
                     if mode == "JXL変換":
-                        return gr.update(visible=False), gr.update(visible=False), gr.update(visible=True), gr.update(visible=True)
+                        return (gr.update(visible=False), gr.update(visible=False), 
+                                gr.update(visible=False), gr.update(visible=False),
+                                gr.update(visible=True), gr.update(visible=True))
+                    elif mode == "WebP変換":
+                        return (gr.update(visible=False), gr.update(visible=False), 
+                                gr.update(visible=True), gr.update(visible=True),
+                                gr.update(visible=False), gr.update(visible=False))
                     else:
-                        return gr.update(visible=True), gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)
+                        return (gr.update(visible=True), gr.update(visible=True), 
+                                gr.update(visible=False), gr.update(visible=False),
+                                gr.update(visible=False), gr.update(visible=False))
 
-                mode_choice.change(update_mode_ui, inputs=[mode_choice], outputs=[quality_sl, convert_chk, dist_sl_single, effort_sl_single])
+                mode_choice.change(update_mode_ui, inputs=[mode_choice], outputs=[quality_sl, convert_chk, webp_quality_sl, webp_lossless_chk, dist_sl_single, effort_sl_single])
                 
-                def process_img(path, mode, q, convert, strip_meta, dist, effort): # ★引数を追加
-                    if not path: return None, "画像を選択してください"
+                def process_img(path, custom_name, mode, q, convert, webp_q, webp_lossless, strip_meta, dist, effort): # ★引数を追加
+                    if not path: return None, None, "画像を選択してください"
                     if mode == "JXL変換":
-                         # encode_utils 側の引数名に合わせて渡す
-                         res, in_s, out_s, log = encode_utils.encode_image_jxl(path, distance=dist, effort=effort, strip_metadata=strip_meta) # ★引数追加
+                         res, in_s, out_s, log = encode_utils.encode_image_jxl(path, distance=dist, effort=effort, strip_metadata=strip_meta, custom_filename=custom_name)
+                    elif mode == "WebP変換":
+                         res, in_s, out_s, log = encode_utils.encode_image_webp(path, quality=webp_q, lossless=webp_lossless, strip_metadata=strip_meta, custom_filename=custom_name)
                     else:
-                         # 標準最適化側にも渡す
-                         res, in_s, out_s, log = encode_utils.optimize_image_standard(path, q, convert, strip_metadata=strip_meta) # ★引数追加
-                    return res, f"**{log}**\nサイズ: {in_s} → {out_s}"
+                         res, in_s, out_s, log = encode_utils.optimize_image_standard(path, q, convert, strip_metadata=strip_meta, custom_filename=custom_name)
+                    # img_out と last_output_path の両方に res を渡す
+                    return res, res, f"**{log}**\nサイズ: {in_s} → {out_s}"
 
                 # 3. クリックイベントの inputs に strip_meta_check を追加
                 img_btn.click(
                     process_img, 
-                    [img_in, mode_choice, quality_sl, convert_chk, strip_meta_check, dist_sl_single, effort_sl_single], # ★ここに追加
-                    [img_out, img_info]
+                    [img_in, custom_filename, mode_choice, quality_sl, convert_chk, webp_quality_sl, webp_lossless_chk, strip_meta_check, dist_sl_single, effort_sl_single],
+                    [img_out, last_output_path, img_info]
+                )
+                
+                # --- 生成後のファイル名変更ロジック ---
+                def apply_new_filename(current_path, new_name):
+                    if not current_path: return gr.update(), current_path
+                    
+                    import os, shutil
+                    from pathlib import Path
+                    if not os.path.exists(current_path): return gr.update(), current_path
+                    if not new_name or not new_name.strip(): return current_path, current_path
+                        
+                    ext = Path(current_path).suffix
+                    safe_name = file_utils.safe_filename(new_name)
+                    new_path = os.path.join(os.path.dirname(current_path), f"{safe_name}{ext}")
+                    
+                    if current_path != new_path:
+                        try:
+                            shutil.copy2(current_path, new_path)
+                            return new_path, new_path
+                        except Exception:
+                            return current_path, current_path
+                    return current_path, current_path
+
+                # テキストボックスでEnterを押したとき ＆ 反映ボタンを押したときにリネームを実行
+                gr.on(
+                    triggers=[custom_filename.submit, apply_name_btn.click],
+                    fn=apply_new_filename,
+                    inputs=[last_output_path, custom_filename],
+                    outputs=[img_out, last_output_path]
                 )
                 
                 links_display1 = gr.Markdown(render_links(config.get("uploader_links", [])))
 
             # --- 2. 動画変換 (AV1) ---
             with gr.Tab("🎬 動画変換 (AV1)"):
-                with gr.Row():
-                    vid_in = gr.Video(label="入力動画", sources="upload")
-                    vid_btn = gr.Button("AV1エンコード開始", variant="primary")
-                vid_out = gr.File(label="出力MP4")
-                vid_btn.click(encode_utils.encode_video, inputs=vid_in, outputs=vid_out)
-                
-                # 【追加】動的に書き換わるリンク表示エリア2
+                video_compressor.create_video_compress_tab(config)
                 links_display2 = gr.Markdown(render_links(config.get("uploader_links", [])))
 
             # --- 3. JXL一括変換 ---
