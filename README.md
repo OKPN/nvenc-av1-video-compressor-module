@@ -31,9 +31,18 @@
 
 ## 💻 起動・使用方法
 
-### 1. 初回起動（全自動バッチ）
+### 1. リポジトリの取得と初回起動（コマンド一括実行）
 
-本リポジトリをダウンロード / クローン後、フォルダ内にある **`start_video_compressor.bat` をダブルクリック** してください。
+ターミナル（コマンドプロンプト / PowerShell）で以下のコマンドを実行するだけで、クローンから環境構築・アプリ起動まで完了します：
+
+```bash
+# 1. リポジトリのクローン ＆ フォルダ移動
+git clone https://github.com/OKPN/nvenc-av1-video-compressor-module.git
+cd nvenc-av1-video-compressor-module
+
+# 2. 全自動起動バッチの実行 (初回は venv 自動作成 ＆ pip install を行います)
+start_video_compressor.bat
+```
 
 ```text
 [バッチ処理が自動で行うこと]
@@ -44,6 +53,14 @@
 ```
 
 起動後、ブラウザで `http://localhost:7865` にアクセスしてご利用ください。
+
+*(※ バッチファイルを使わずコマンドラインで手動起動したい場合)*
+```bash
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+python run_video_compressor.py
+```
 
 ---
 

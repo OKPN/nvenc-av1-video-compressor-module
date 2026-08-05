@@ -12,6 +12,17 @@
 
 ---
 
+## 📦 インストール ＆ 起動コマンド
+
+```bash
+# 1. リポジトリのクローン ＆ 移動
+git clone https://github.com/OKPN/nvenc-av1-video-compressor-module.git
+cd nvenc-av1-video-compressor-module
+
+# 2. 自動起動バッチの実行
+start_video_compressor.bat
+```
+
 ## 💻 他アプリへの組み込み方法
 
 ご自身の Gradio コードに `video_compressor` をインポートするだけで、1 行で動画圧縮タブを連結できます：
