@@ -330,7 +330,7 @@ def create_video_compress_tab(config=None):
                 )
 
             with gr.Column(scale=1, elem_classes=["card-box"]):
-                gr.HTML('<div class="card-title">② 変換済みファイル一覧</div><div class="card-desc">変換後にまとめて一括ダウンロードできます</div>')
+                gr.HTML('<div class="card-title">② 変換済みファイル一覧</div><div class="card-desc">複数変換時は先頭の ZIP でまとめて一括保存できます</div>')
                 vid_out = gr.File(
                     label="変換完了ファイル",
                     file_count="multiple"
@@ -405,11 +405,27 @@ def create_video_compress_tab(config=None):
                     logs.append(f"❌ {filename}: {msg}")
 
             progress(1.0, desc="変換完了!")
+            
+            # 複数ファイル変換完了時は ZIP アーカイブを自動作成してダウンロード一覧の先頭に追加
+            final_outputs = []
+            if len(output_files) > 1:
+                zip_path = os.path.join(tempfile.gettempdir(), "compressed_videos_all.zip")
+                try:
+                    import zipfile
+                    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+                        for file_p in output_files:
+                            zipf.write(file_p, arcname=Path(file_p).name)
+                    final_outputs.append(zip_path)
+                except Exception as zip_e:
+                    print(f"ZIP作成エラー: {zip_e}")
+            
+            final_outputs.extend(output_files)
+
             summary_header = f"🎉 一括変換完了! (成功: {success_count} / {total_count} 件)\n" + ("-" * 50) + "\n"
             final_status = summary_header + "\n".join(logs)
             final_counter_html = make_counter_html(0, 0, success_count, err_count)
 
-            return output_files, final_status, final_counter_html
+            return final_outputs, final_status, final_counter_html
 
         vid_btn.click(
             fn=_handle_batch_compress,
