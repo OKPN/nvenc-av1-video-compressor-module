@@ -270,6 +270,13 @@ def make_counter_html(wait=0, proc=0, succ=0, err=0):
     """
 
 
+def check_ffmpeg_installed():
+    try:
+        res = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
+        return res.returncode == 0
+    except Exception:
+        return False
+
 def create_video_compress_tab(config=None):
     if config is None:
         config = load_default_config()
@@ -285,6 +292,34 @@ def create_video_compress_tab(config=None):
             <p>他アプリへ連結・組み込み可能な動画一括圧縮コンポーネント (NVIDIA NVENC アクセラレーション)</p>
         </div>
         """)
+
+        # FFmpeg 未インストール時のみ最上部に表示される警告＆インストールバナー
+        is_ffmpeg_ok = check_ffmpeg_installed()
+        with gr.Column(visible=not is_ffmpeg_ok, elem_classes=["card-box"]) as ffmpeg_alert_group:
+            gr.Markdown("⚠️ **FFmpeg が未検出です。** 動画圧縮を実行するには FFmpeg のインストールが必要です。")
+            with gr.Row():
+                install_top_btn = gr.Button("⚡ FFmpegを今すぐ自動インストール (Winget)", elem_classes=["orange-btn"])
+            install_top_log = gr.Textbox(label="インストールログ", lines=2, visible=False)
+
+            def _install_ffmpeg_top(progress=gr.Progress()):
+                progress(0.2, desc="WingetでFFmpegを自動インストール中...")
+                try:
+                    cmd = ["winget", "install", "-e", "--id", "Gyan.FFmpeg", "--accept-source-agreements", "--accept-package-agreements"]
+                    res = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                    out_msg = res.stdout if res.stdout else ""
+                    if check_ffmpeg_installed():
+                        progress(1.0, desc="インストール完了!")
+                        # インストール成功したため警告バナーを完全非表示(消す)にする
+                        return gr.update(visible=False), gr.update(visible=False, value="")
+                    else:
+                        return gr.update(visible=True), gr.update(visible=True, value=f"⚠️ インストール結果:\n{out_msg}\n{res.stderr}")
+                except Exception as e:
+                    return gr.update(visible=True), gr.update(visible=True, value=f"❌ エラー: {str(e)}")
+
+            install_top_btn.click(
+                fn=_install_ffmpeg_top,
+                outputs=[ffmpeg_alert_group, install_top_log]
+            )
 
         with gr.Row():
             with gr.Column(scale=1, elem_classes=["card-box"]):
