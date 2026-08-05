@@ -1,6 +1,6 @@
 # NVENC AV1 Video Compressor Module
 
-他アプリへの組込み・連結を前提として設計された、NVIDIA NVENC ハードウェアアクセラレーション対応の超高速 AV1 動画一括圧縮モジュール ＆ Gradio UI です。
+他アプリへの組込み・連結およびリモート利用を前提として設計された、NVIDIA NVENC ハードウェアアクセラレーション対応の超高速 AV1 動画一括圧縮モジュール ＆ Web UI アプリです。
 
 ---
 
@@ -9,7 +9,7 @@
 - **対応 GPU**: **NVIDIA GeForce RTX 40シリーズ以降** (Ada Lovelace 世代以降: RTX 4060 / 4070 / 4080 / 4090 / RTX Laptop GPU 等) または **AV1 NVENC エンコードに対応した NVIDIA GPU**
   - ※ RTX 30シリーズ以前や AMD / Intel GPU、CPU のみの環境では `av1_nvenc` エンコーダが動作しません。
 - **動作環境**: Windows 10 / 11
-- **必須ツール**: FFmpeg (AV1 NVENC 対応版。※ アプリの設定画面からワンクリックで自動インストール可能)
+- **必須ツール**: FFmpeg (AV1 NVENC 対応版。※ アプリの設定画面または起動バッチからワンクリックで自動インストール可能)
 - **Python**: Python 3.10 以上
 
 ---
@@ -17,54 +17,48 @@
 ## 🚀 特長
 
 1. **他アプリへの簡単な組み込み (Module Design)**:
-   - バックエンド処理 (`compress_video`) や Gradio UI コンポーネント (`create_video_compress_tab`) がモジュール化されており、他の Python アプリや Gradio UI へ 1 行で連結・組み込みが可能です。
-2. **超高速一括圧縮**:
-   - 複数動画ファイルおよびフォルダのドラッグ＆ドロップに対応。指定したフォルダ内の動画を再帰的に検索して全自動で一括変換します。
-3. **ComfyUI などのメタデータを完全維持**:
+   - バックエンド処理 (`compress_video`) や Gradio UI コンポーネント (`create_video_compress_tab`) が完全モジュール化されており、他の Python アプリや Gradio UI へ 1 行で連結・組み込みが可能です。
+2. **LAN内や Tailscale 経由でのリモート利用に対応**:
+   - `0.0.0.0` バインドで起動するため、メインPCで本アプリを立ち上げておけば、**Tailscale や LAN 内の他端末（Mac、iPhone、Android、他ノートPCなど）のブラウザからリモート接続**して動画を高速圧縮できます。
+3. **ダブルクリック一発起動 (venv自動生成)**:
+   - 付属の `start_video_compressor.bat` を実行するだけで、仮想環境 (`venv`) の作成、ライブラリのインストール、FFmpeg チェック、アプリ起動を全自動で行います。
+4. **ComfyUI などのメタデータを完全維持**:
    - 生成 AI (ComfyUI / AnimateDiff / VideoCombine 等) のプロンプトやワークフロー情報（JSON メタデータ）を脱落させずに動画内へそのまま継承します (`-map_metadata 0`)。
-4. **細かな調整と設定の記憶**:
-   - CQ値 (デフォルト: 32)、NVENC プリセット (デフォルト: p6)、出力ファイルの末尾サフィックス (デフォルト: `_compressed`) などを UI 上で変更でき、`config.json` に設定を記憶・自動復元します。
-5. **FFmpeg 管理機能**:
-   - システム環境チェック、ワンクリックでの自動インストール、最新版へのアップデートを UI 上から安全に行えます。
+5. **ポータブル＆簡単なアンインストール**:
+   - システムやレジストリを汚さないクリーンな構造のため、不要になった場合は**フォルダごと削除するだけ**で完全にアンインストールできます。
 
 ---
 
-## 📦 インストール方法
+## 💻 起動・使用方法
 
-### 1. リポジトリのクローン
-```bash
-git clone https://github.com/OKPN/nvenc-av1-video-compressor-module.git
-cd nvenc-av1-video-compressor-module
+### 1. 初回起動（全自動バッチ）
+
+本リポジトリをダウンロード / クローン後、フォルダ内にある **`start_video_compressor.bat` をダブルクリック** してください。
+
+```text
+[バッチ処理が自動で行うこと]
+1. 仮想環境 (venv) の自動作成
+2. 必要なライブラリ (requirements.txt) の自動インストール
+3. FFmpeg の検出テストと自動インストール案内
+4. Web UI アプリの自動起動 (http://localhost:7865)
 ```
 
-### 2. 仮想環境の作成とライブラリのインストール
-```bash
-python -m venv venv
-venv\Scripts\activate
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-*(必要ライブラリ: `gradio`, `pillow`, `requests` 等)*
+起動後、ブラウザで `http://localhost:7865` にアクセスしてご利用ください。
 
 ---
 
-## 💻 使い方
+### 2. LAN内・Tailscale 経由で他端末から使う場合
 
-### A. 動画圧縮モジュール単体で起動する場合
+メインPC（NVIDIA GPU搭載機）でアプリを起動した状態で、他端末のブラウザから以下のアドレスにアクセスします：
 
-以下のいずれかのコマンドを実行すると、独立した軽量 Gradio Web UI が起動します：
+- **LAN内**: `http://[メインPCのローカルIP]:7865`
+- **Tailscale経由**: `http://[メインPCのTailscale-IP]:7865`
 
-```bash
-python run_video_compressor.py
-```
-*(または `python video_compressor/run_app.py`)*
-
-ブラウザで `http://localhost:7865` にアクセスしてご利用ください。
+スマホや Mac など、NVIDIA GPU が入っていない端末からでもメインPCの NVENC パワーを使って超高速圧縮が可能です。
 
 ---
 
-### B. 他の Gradio アプリにこのモジュールを組み込む（連結する）場合
+### 3. 他の Gradio アプリにモジュールとして組み込む場合
 
 ご自身の Gradio コードに `video_compressor` をインポートするだけで、1 行で動画圧縮タブを連結できます：
 
@@ -79,7 +73,7 @@ with gr.Blocks() as my_app:
             video_compressor.create_video_compress_tab()
             
         with gr.Tab("その他の機能"):
-            # ご自身のアプリの他の機能
+            # ご自身のアプリの機能
             ...
 
 my_app.launch()
@@ -100,15 +94,21 @@ output_path, status_msg = video_compressor.compress_video(
     cq=32,                  # 画質/CQ値 (数字が小さいほど高画質)
     preset="p6",            # NVENC プリセット (p1~p7)
     keep_metadata=True,     # メタデータ保持
-    suffix="_av1"           # 出力ファイルの末尾文字
+    suffix="_compressed"    # 出力ファイルの末尾文字
 )
 
 print(status_msg)
-print(f"出力ファイル: {output_path}")
 ```
+
+---
+
+## 🗑️ アンインストール方法
+
+本アプリはレジストリやシステム環境を一切変更しないポータブル設計です。
+不要になった場合は、**本アプリのフォルダ全体をそのまま手動で削除（ごみ箱へ移動）するだけ** で完全にアンインストールが完了します。
 
 ---
 
 ## 📄 ライセンス
 
-MIT License
+[MIT License](LICENSE)
