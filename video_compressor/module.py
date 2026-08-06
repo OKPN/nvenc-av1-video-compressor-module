@@ -441,7 +441,7 @@ def create_video_compress_tab(config=None):
     }
 
 
-def create_video_config_tab(config=None, save_func=None):
+def create_video_config_tab(config=None, save_func=None, is_embedded=False):
     if config is None:
         config = load_default_config()
 
@@ -476,42 +476,55 @@ def create_video_config_tab(config=None, save_func=None):
             gr.HTML('<div class="guide-text">高速 (低圧縮: p1〜p3)  ←─────  標準 (p4)  ─────→  遅い・最高品質 (p5〜p7)</div>')
 
         with gr.Column(elem_classes=["card-box"]):
-            gr.HTML('<div class="card-title">📁 出力・アプリ起動設定</div><div class="card-desc">出力ファイルやアプリ起動時の動作を設定します</div>')
+            card_title = "📁 出力設定" if is_embedded else "📁 出力・アプリ起動設定"
+            card_desc = "出力ファイルの保存設定を行います" if is_embedded else "出力ファイルやアプリ起動時の動作を設定します"
+            gr.HTML(f'<div class="card-title">{card_title}</div><div class="card-desc">{card_desc}</div>')
             with gr.Row():
                 cfg_suffix = gr.Textbox(
                     value=config.get("video_default_suffix", "_compressed"),
                     label="出力ファイルの末尾サフィックス (元のファイル名の後に追加されます)"
                 )
                 cfg_port = gr.Number(
-                    value=config.get("server_port", 7861),
+                    value=config.get("server_port", 7862),
                     label="初期起動ポート (占有時は+1ずつ順次自動試行)",
-                    precision=0
+                    precision=0,
+                    visible=not is_embedded
                 )
-            with gr.Row():
+            with gr.Row(visible=not is_embedded):
                 cfg_auto_browser = gr.Checkbox(
                     value=config.get("auto_open_browser", True),
-                    label="アプリ起動時に自動でブラウザを開く (http://localhost:ポート)"
+                    label="アプリ起動時に自動でブラウザを開く (http://localhost:ポート)",
+                    visible=not is_embedded
+                )
+            with gr.Row():
+                cfg_auto_delete = gr.Checkbox(
+                    value=config.get("auto_delete_original_on_compress", False),
+                    label="🗑️ 圧縮成功時に元動画を削除 (Windowsゴミ箱へ移動)"
                 )
 
-        def _on_save(cq, preset, suffix, port, auto_browser):
+
+        def _on_save(cq, preset, suffix, port, auto_browser, auto_delete):
             new_cfg = {
                 "video_default_cq": int(cq),
                 "video_default_preset": preset,
                 "video_default_suffix": suffix,
                 "server_port": int(port),
-                "auto_open_browser": bool(auto_browser)
+                "auto_open_browser": bool(auto_browser),
+                "auto_delete_original_on_compress": bool(auto_delete)
             }
             if save_func:
                 msg = save_func(new_cfg)
             else:
                 msg = save_config_data(new_cfg)
-            return f"{msg} (※ ポート変更を反映させるにはアプリの再起動が必要です)"
+            return f"{msg}"
 
         save_btn.click(
             fn=_on_save,
-            inputs=[cfg_cq, cfg_preset, cfg_suffix, cfg_port, cfg_auto_browser],
+            inputs=[cfg_cq, cfg_preset, cfg_suffix, cfg_port, cfg_auto_browser, cfg_auto_delete],
             outputs=save_msg
         )
+
+
 
         with gr.Column(elem_classes=["card-box"]):
             gr.HTML('<div class="card-title">🖥️ システム環境チェック & FFmpeg管理</div><div class="card-desc">FFmpegの状態を確認・管理します</div>')
@@ -601,7 +614,12 @@ def create_video_compressor_app(config=None, save_func=None, title="NVENC AV1 Vi
     if config is None:
         config = load_default_config()
 
-    with gr.Blocks(title=title, css=CUSTOM_CSS) as demo:
+    try:
+        demo = gr.Blocks(title=title, css=CUSTOM_CSS)
+    except Exception:
+        demo = gr.Blocks(title=title)
+
+    with demo:
         with gr.Tabs():
             with gr.Tab("🎬 動画一括圧縮"):
                 create_video_compress_tab(config)
