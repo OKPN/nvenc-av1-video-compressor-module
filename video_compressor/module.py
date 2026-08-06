@@ -441,7 +441,7 @@ def create_video_compress_tab(config=None):
     }
 
 
-def create_video_config_tab(config=None, save_func=None, is_embedded=False):
+def create_video_config_tab(config=None, save_func=None, is_embedded=False, restart_func=None):
     if config is None:
         config = load_default_config()
 
@@ -454,6 +454,8 @@ def create_video_config_tab(config=None, save_func=None, is_embedded=False):
             </div>
             """)
             save_btn = gr.Button("💾 設定を保存", elem_classes=["orange-btn"])
+            if not is_embedded and restart_func:
+                restart_btn = gr.Button("♻️ アプリを再起動", variant="stop")
 
         save_msg = gr.Markdown("")
 
@@ -485,7 +487,7 @@ def create_video_config_tab(config=None, save_func=None, is_embedded=False):
                     label="出力ファイルの末尾サフィックス (元のファイル名の後に追加されます)"
                 )
                 cfg_port = gr.Number(
-                    value=config.get("server_port", 7862),
+                    value=config.get("server_port", 7861),
                     label="初期起動ポート (占有時は+1ずつ順次自動試行)",
                     precision=0,
                     visible=not is_embedded
@@ -524,7 +526,17 @@ def create_video_config_tab(config=None, save_func=None, is_embedded=False):
             outputs=save_msg
         )
 
+        if not is_embedded and restart_func:
+            def _on_restart(cq, preset, suffix, port, auto_browser, auto_delete):
+                _on_save(cq, preset, suffix, port, auto_browser, auto_delete)
+                restart_func()
+                return "♻️ アプリを再起動しています..."
 
+            restart_btn.click(
+                fn=_on_restart,
+                inputs=[cfg_cq, cfg_preset, cfg_suffix, cfg_port, cfg_auto_browser, cfg_auto_delete],
+                outputs=save_msg
+            )
 
         with gr.Column(elem_classes=["card-box"]):
             gr.HTML('<div class="card-title">🖥️ システム環境チェック & FFmpeg管理</div><div class="card-desc">FFmpegの状態を確認・管理します</div>')
@@ -610,7 +622,7 @@ def create_video_config_tab(config=None, save_func=None, is_embedded=False):
         ffmpeg_status.value = initial_status
 
 
-def create_video_compressor_app(config=None, save_func=None, title="NVENC AV1 Video Compressor Module"):
+def create_video_compressor_app(config=None, save_func=None, title="NVENC AV1 Video Compressor Module", restart_func=None):
     if config is None:
         config = load_default_config()
 
@@ -624,6 +636,6 @@ def create_video_compressor_app(config=None, save_func=None, title="NVENC AV1 Vi
             with gr.Tab("🎬 動画一括圧縮"):
                 create_video_compress_tab(config)
             with gr.Tab("⚙️ 設定"):
-                create_video_config_tab(config, save_func)
+                create_video_config_tab(config, save_func, is_embedded=False, restart_func=restart_func)
 
     return demo
