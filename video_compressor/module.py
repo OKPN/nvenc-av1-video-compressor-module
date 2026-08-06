@@ -324,11 +324,19 @@ def create_video_compress_tab(config=None):
 
         with gr.Row():
             with gr.Column(scale=1, elem_classes=["card-box"]):
-                gr.HTML('<div class="card-title">① 入力動画を選択</div><div class="card-desc">複数ファイル選択・フォルダドラッグ＆ドロップ対応</div>')
-                vid_in = gr.File(
-                    label="動画ファイルまたはフォルダをここにドロップ",
-                    file_count="multiple"
-                )
+                gr.HTML('<div class="card-title">① 入力動画を選択</div><div class="card-desc">ファイルドロップ、またはフォルダパス指定に対応</div>')
+                with gr.Tabs():
+                    with gr.Tab("📁 ファイル・小規模ドロップ"):
+                        vid_in = gr.File(
+                            label="動画ファイルをここにドロップ",
+                            file_count="multiple",
+                            file_types=["video"]
+                        )
+                    with gr.Tab("📂 フォルダパス指定 (大容量・アップロード不要)"):
+                        folder_in = gr.Textbox(
+                            label="PC上の動画フォルダパス (例: C:\\Users\\Name\\Videos)",
+                            placeholder="動画フォルダのパスを貼り付けてください (ブラウザ転送なしで超高速処理)"
+                        )
 
             with gr.Column(scale=1, elem_classes=["card-box"]):
                 gr.HTML('<div class="card-title">② 変換済みファイル一覧</div><div class="card-desc">複数変換時は先頭の ZIP でまとめて一括保存できます</div>')
@@ -369,11 +377,20 @@ def create_video_compress_tab(config=None):
 
         vid_btn = gr.Button("一括 AV1 エンコード開始", elem_classes=["orange-btn"])
 
-        def _handle_batch_compress(input_files, cq, preset, keep_meta, suffix, progress=gr.Progress()):
-            if not input_files:
-                return None, "動画ファイルまたはフォルダを選択してください。", make_counter_html(0, 0, 0, 0)
+        def _handle_batch_compress(input_files, folder_path, cq, preset, keep_meta, suffix, progress=gr.Progress()):
+            sources = []
+            if input_files:
+                if isinstance(input_files, list):
+                    sources.extend(input_files)
+                else:
+                    sources.append(input_files)
+            if folder_path and str(folder_path).strip():
+                sources.append(str(folder_path).strip())
 
-            target_videos = collect_video_files(input_files)
+            if not sources:
+                return None, "動画ファイルまたはフォルダを指定してください。", make_counter_html(0, 0, 0, 0)
+
+            target_videos = collect_video_files(sources)
             total_count = len(target_videos)
 
             if total_count == 0:
@@ -386,10 +403,8 @@ def create_video_compress_tab(config=None):
 
             for i, video_path in enumerate(target_videos):
                 filename = Path(video_path).name
-                wait_left = total_count - i - 1
                 progress((i / total_count), desc=f"変換中 ({i+1}/{total_count}): {filename}")
 
-                # 処理中のカウンター更新
                 out_path, msg = compress_video(
                     video_path,
                     cq=cq,
@@ -430,7 +445,7 @@ def create_video_compress_tab(config=None):
 
         vid_btn.click(
             fn=_handle_batch_compress,
-            inputs=[vid_in, cq_slider, preset_radio, keep_meta_chk, suffix_input],
+            inputs=[vid_in, folder_in, cq_slider, preset_radio, keep_meta_chk, suffix_input],
             outputs=[vid_out, status_box, counter_html]
         )
 
