@@ -500,12 +500,22 @@ def create_video_config_tab(config=None, save_func=None, is_embedded=False, rest
                 )
 
         def _on_save(cq, preset, suffix, port, auto_browser):
+            try:
+                port_val = int(port) if port is not None else config.get("server_port", 7861)
+            except (ValueError, TypeError):
+                port_val = config.get("server_port", 7861)
+
+            try:
+                cq_val = int(cq) if cq is not None else config.get("video_default_cq", 32)
+            except (ValueError, TypeError):
+                cq_val = config.get("video_default_cq", 32)
+
             new_cfg = {
-                "video_default_cq": int(cq),
-                "video_default_preset": preset,
-                "video_default_suffix": suffix,
-                "server_port": int(port),
-                "auto_open_browser": bool(auto_browser)
+                "video_default_cq": cq_val,
+                "video_default_preset": preset if preset else "p6",
+                "video_default_suffix": suffix if suffix is not None else "_compressed",
+                "server_port": port_val,
+                "auto_open_browser": bool(auto_browser) if auto_browser is not None else True
             }
             if save_func:
                 msg = save_func(new_cfg)
