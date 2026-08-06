@@ -2,8 +2,11 @@ import os
 import json
 import tempfile
 import subprocess
+import warnings
 from pathlib import Path
 import gradio as gr
+
+warnings.filterwarnings("ignore")
 
 VIDEO_EXTENSIONS = {".mp4", ".webm", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".m4v"}
 CONFIG_FILE = Path(__file__).resolve().parent.parent / "config.json"
