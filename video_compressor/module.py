@@ -498,21 +498,14 @@ def create_video_config_tab(config=None, save_func=None, is_embedded=False, rest
                     label="アプリ起動時に自動でブラウザを開く (http://localhost:ポート)",
                     visible=not is_embedded
                 )
-            with gr.Row():
-                cfg_auto_delete = gr.Checkbox(
-                    value=config.get("auto_delete_original_on_compress", False),
-                    label="🗑️ 圧縮成功時に元動画を削除 (Windowsゴミ箱へ移動)"
-                )
 
-
-        def _on_save(cq, preset, suffix, port, auto_browser, auto_delete):
+        def _on_save(cq, preset, suffix, port, auto_browser):
             new_cfg = {
                 "video_default_cq": int(cq),
                 "video_default_preset": preset,
                 "video_default_suffix": suffix,
                 "server_port": int(port),
-                "auto_open_browser": bool(auto_browser),
-                "auto_delete_original_on_compress": bool(auto_delete)
+                "auto_open_browser": bool(auto_browser)
             }
             if save_func:
                 msg = save_func(new_cfg)
@@ -522,19 +515,19 @@ def create_video_config_tab(config=None, save_func=None, is_embedded=False, rest
 
         save_btn.click(
             fn=_on_save,
-            inputs=[cfg_cq, cfg_preset, cfg_suffix, cfg_port, cfg_auto_browser, cfg_auto_delete],
+            inputs=[cfg_cq, cfg_preset, cfg_suffix, cfg_port, cfg_auto_browser],
             outputs=save_msg
         )
 
         if not is_embedded and restart_func:
-            def _on_restart(cq, preset, suffix, port, auto_browser, auto_delete):
-                _on_save(cq, preset, suffix, port, auto_browser, auto_delete)
+            def _on_restart(cq, preset, suffix, port, auto_browser):
+                _on_save(cq, preset, suffix, port, auto_browser)
                 restart_func()
                 return "♻️ アプリを再起動しています..."
 
             restart_btn.click(
                 fn=_on_restart,
-                inputs=[cfg_cq, cfg_preset, cfg_suffix, cfg_port, cfg_auto_browser, cfg_auto_delete],
+                inputs=[cfg_cq, cfg_preset, cfg_suffix, cfg_port, cfg_auto_browser],
                 outputs=save_msg
             )
 
