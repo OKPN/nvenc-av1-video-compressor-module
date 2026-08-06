@@ -48,7 +48,7 @@ start_video_compressor.bat
 [バッチ処理が自動で行うこと]
 1. 仮想環境 (venv) の自動作成
 2. 必要なライブラリ (requirements.txt) の自動インストール
-3. FFmpeg の検出テストと自動インストール案内
+3. FFmpeg の検出と未検出時の全自動インストール (Winget)
 4. Web UI アプリの自動起動 (http://localhost:7865)
 ```
 

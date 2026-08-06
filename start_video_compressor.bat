@@ -33,23 +33,19 @@ echo [INFO] 仮想環境の構築が完了しました！
 echo.
 
 :CHECK_FFMPEG
-:: 2. FFmpeg のチェック
+:: 2. FFmpeg のチェック＆無ければ全自動インストール
 where ffmpeg >nul 2>nul
 if %errorlevel% equ 0 goto :START_APP
 
-echo [WARNING] FFmpeg が見つかりませんでした。
-echo Winget を使用して FFmpeg (Gyan.FFmpeg) を自動インストールしますか？
-set /p ASK_INSTALL="インストールしますか？ (y/n) > "
-
-if /i "!ASK_INSTALL!"=="y" (
-    echo [INFO] winget で FFmpeg をインストール中...
-    winget install -e --id Gyan.FFmpeg --accept-source-agreements --accept-package-agreements
-    echo.
-    echo [INFO] インストールが完了しました。
+echo [INFO] システムに FFmpeg が見つかりません。
+echo [INFO] winget を使用して FFmpeg (Gyan.FFmpeg) を全自動インストールしています...
+winget install -e --id Gyan.FFmpeg --accept-source-agreements --accept-package-agreements
+if %errorlevel% equ 0 (
+    echo [INFO] FFmpeg の自動インストールが正常に完了しました！
 ) else (
-    echo [INFO] FFmpeg の自動インストールをスキップしました。
-    echo (※ Web UI の設定タブから後でインストールすることも可能です)
+    echo [WARNING] FFmpeg の自動インストール処理が完了したか、スキップされました。
 )
+echo.
 
 :START_APP
 :: 3. アプリケーションの起動
