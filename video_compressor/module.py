@@ -156,7 +156,8 @@ def load_default_config():
         "video_default_cq": 32,
         "video_default_preset": "p6",
         "video_default_suffix": "_compressed",
-        "server_port": 7865
+        "server_port": 7861,
+        "auto_open_browser": True
     }
     if CONFIG_FILE.exists():
         try:
@@ -475,24 +476,30 @@ def create_video_config_tab(config=None, save_func=None):
             gr.HTML('<div class="guide-text">高速 (低圧縮: p1〜p3)  ←─────  標準 (p4)  ─────→  遅い・最高品質 (p5〜p7)</div>')
 
         with gr.Column(elem_classes=["card-box"]):
-            gr.HTML('<div class="card-title">📁 出力・アプリ設定</div><div class="card-desc">出力ファイルやアプリ起動の設定を行います</div>')
+            gr.HTML('<div class="card-title">📁 出力・アプリ起動設定</div><div class="card-desc">出力ファイルやアプリ起動時の動作を設定します</div>')
             with gr.Row():
                 cfg_suffix = gr.Textbox(
                     value=config.get("video_default_suffix", "_compressed"),
                     label="出力ファイルの末尾サフィックス (元のファイル名の後に追加されます)"
                 )
                 cfg_port = gr.Number(
-                    value=config.get("server_port", 7865),
-                    label="アプリの起動ポート (要再起動)",
+                    value=config.get("server_port", 7861),
+                    label="初期起動ポート (占有時は+1ずつ順次自動試行)",
                     precision=0
                 )
+            with gr.Row():
+                cfg_auto_browser = gr.Checkbox(
+                    value=config.get("auto_open_browser", True),
+                    label="アプリ起動時に自動でブラウザを開く (http://localhost:ポート)"
+                )
 
-        def _on_save(cq, preset, suffix, port):
+        def _on_save(cq, preset, suffix, port, auto_browser):
             new_cfg = {
                 "video_default_cq": int(cq),
                 "video_default_preset": preset,
                 "video_default_suffix": suffix,
-                "server_port": int(port)
+                "server_port": int(port),
+                "auto_open_browser": bool(auto_browser)
             }
             if save_func:
                 msg = save_func(new_cfg)
@@ -500,7 +507,11 @@ def create_video_config_tab(config=None, save_func=None):
                 msg = save_config_data(new_cfg)
             return f"{msg} (※ ポート変更を反映させるにはアプリの再起動が必要です)"
 
-        save_btn.click(fn=_on_save, inputs=[cfg_cq, cfg_preset, cfg_suffix, cfg_port], outputs=save_msg)
+        save_btn.click(
+            fn=_on_save,
+            inputs=[cfg_cq, cfg_preset, cfg_suffix, cfg_port, cfg_auto_browser],
+            outputs=save_msg
+        )
 
         with gr.Column(elem_classes=["card-box"]):
             gr.HTML('<div class="card-title">🖥️ システム環境チェック & FFmpeg管理</div><div class="card-desc">FFmpegの状態を確認・管理します</div>')
