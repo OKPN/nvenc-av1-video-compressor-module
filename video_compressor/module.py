@@ -338,7 +338,7 @@ def create_video_compress_tab(config=None):
                     with gr.Tab("📂 フォルダパス指定 (大容量・アップロード不要)"):
                         folder_in = gr.Textbox(
                             label="PC上の動画フォルダパス (例: C:\\Users\\Name\\Videos)",
-                            placeholder="動画フォルダのパスを貼り付けてください (ブラウザ転送なしで超高速処理)"
+                            placeholder="動画フォルダのパスを貼り付けてください (ブラウザ転送なしでダイレクト処理)"
                         )
 
             with gr.Column(scale=1, elem_classes=["card-box"]):
@@ -366,7 +366,7 @@ def create_video_compress_tab(config=None):
                 preset_radio = gr.Radio(
                     choices=["p1", "p2", "p3", "p4", "p5", "p6", "p7"],
                     value=default_preset,
-                    label="NVENC プリセット (p1=最速 ~ p7=最高画質)"
+                    label="NVENC プリセット (p1=速度・処理優先 ~ p7=品質・画質優先)"
                 )
             with gr.Row():
                 keep_meta_chk = gr.Checkbox(
@@ -493,7 +493,7 @@ def create_video_config_tab(config=None, save_func=None, is_embedded=False, rest
                     value=config.get("video_default_preset", "p6"),
                     label="デフォルト NVENC プリセット"
                 )
-            gr.HTML('<div class="guide-text">高速 (低圧縮: p1〜p3)  ←─────  標準 (p4)  ─────→  遅い・最高品質 (p5〜p7)</div>')
+            gr.HTML('<div class="guide-text">処理優先 (低圧縮: p1〜p3)  ←─────  標準 (p4)  ─────→  画質優先 (p5〜p7)</div>')
 
         with gr.Column(elem_classes=["card-box"]):
             card_title = "📁 出力設定" if is_embedded else "📁 出力・アプリ起動設定"

@@ -1,6 +1,6 @@
 # NVENC AV1 Video Compressor Module
 
-他アプリへの組込み・連結およびリモート利用を前提として設計された、NVIDIA NVENC ハードウェアアクセラレーション対応の超高速 AV1 動画一括圧縮モジュール ＆ Web UI アプリです。
+他アプリへの組込み・連結およびリモート利用を前提として設計された、NVIDIA NVENC ハードウェアアクセラレーション対応の AV1 動画一括圧縮モジュール ＆ Web UI アプリです。
 
 ---
 
@@ -19,7 +19,7 @@
 1. **他アプリへの簡単な組み込み (Module Design)**:
    - バックエンド処理 (`compress_video`) や Gradio UI コンポーネント (`create_video_compress_tab`) が完全モジュール化されており、他の Python アプリや Gradio UI へ 1 行で連結・組み込みが可能です。
 2. **LAN内や Tailscale 経由でのリモート利用に対応**:
-   - `0.0.0.0` バインドで起動するため、メインPCで本アプリを立ち上げておけば、**Tailscale や LAN 内の他端末（Mac、iPhone、Android、他ノートPCなど）のブラウザからリモート接続**して動画を高速圧縮できます。
+   - `0.0.0.0` バインドで起動するため、メインPCで本アプリを立ち上げておけば、**Tailscale や LAN 内の他端末（Mac、iPhone、Android、他ノートPCなど）のブラウザからリモート接続**して動画を一括圧縮できます。
 3. **ダブルクリック一発起動 (venv自動生成)**:
    - 付属の `start_video_compressor.bat` を実行するだけで、仮想環境 (`venv`) の作成、ライブラリのインストール、FFmpeg チェック、アプリ起動を全自動で行います。
 4. **ComfyUI などのメタデータを完全維持**:
@@ -75,7 +75,7 @@ python run_video_compressor.py
 - **LAN内**: `http://[メインPCのローカルIP]:7865`
 - **Tailscale経由**: `http://[メインPCのTailscale-IP]:7865`
 
-スマホや Mac など、NVIDIA GPU が入っていない端末からでもメインPCの NVENC パワーを使って超高速圧縮が可能です。
+スマホや Mac など、NVIDIA GPU が入っていない端末からでもメインPCの NVENC パワーを使って一括圧縮が可能です。
 
 ---
 
